@@ -350,6 +350,7 @@ export const generateLandscapeDesign = async (
         "features": ["list of features like 'Fire pit', 'Water fountain', 'Lighting fixtures'"],
         "structures": ["list of structures like 'Pergola', 'Arbor', 'Trellis'"],
         "furniture": ["list of outdoor furniture like 'Bench', '2 Lounge chairs'"],
+        "labor": ["list of labor/installation tasks implied, e.g., 'Site preparation 400 sqft', 'Paver installation', 'Planting labor for 20 shrubs'"],
         "quantities": {
           "sod_sqft": 0,
           "mulch_sqft": 0,
@@ -612,6 +613,14 @@ export const generateLandscapeDesign = async (
           plantPalette = ragData.plantPalette || [];
           ragEnhanced = ragData.rag_enhanced || false;
           console.log(`✅ RAG Enhancement: Found ${plantPalette.length} plants in catalog`);
+          if (ragData.labor && ragData.labor.length) {
+            console.log(`✅ RAG Enhancement: Found ${ragData.labor.length} structured labor items from components collection`);
+            // store for later use in estimates
+            (window as any).__ragLabor = ragData.labor; // lightweight bridge for now
+          }
+          if (ragData.hardscape && ragData.hardscape.length) {
+            console.log(`✅ RAG Enhancement: Found ${ragData.hardscape.length} hardscape items`);
+          }
         } else {
           console.warn("RAG Enhancement failed, continuing without it");
         }
@@ -701,14 +710,27 @@ export const generateLandscapeDesign = async (
               notes: f.description || "",
               category: 'Furniture'
             })),
-            {
-              name: "Labor & Installation",
-              quantity: "1",
-              unitCost: "$5,000",
-              totalCost: "$5,000",
-              notes: "Professional installation and labor costs",
-              category: 'Labor'
-            }
+            // Prefer structured labor from the components collection (RAG) when available.
+            // Falls back to a single placeholder labor line (the old behavior).
+            ...(
+              (window as any).__ragLabor && (window as any).__ragLabor.length
+                ? (window as any).__ragLabor.map((l: any) => ({
+                    name: l.common_name || l.name || "Labor Item",
+                    quantity: `${l.quantity || 1}`,
+                    unitCost: l.unit_price || l.unitCost || "TBD",
+                    totalCost: l.total_estimate || l.totalCost || "TBD",
+                    notes: l.notes || l.description || "From structured components catalog",
+                    category: 'Labor'
+                  }))
+                : [{
+                    name: "Labor & Installation",
+                    quantity: "1",
+                    unitCost: "$5,000",
+                    totalCost: "$5,000",
+                    notes: "Professional installation and labor costs (consider enabling RAG components for structured labor)",
+                    category: 'Labor'
+                  }]
+            )
           ],
         plantPalette,
         ragEnhanced,

@@ -73,6 +73,38 @@ PRICING_DATABASE = {
     "retaining wall": {
         "block (per sq ft face)": "$15 - $25",
         "natural stone (per sq ft face)": "$30 - $60"
+    },
+
+    # LABOR & INSTALLATION (per unit or as % of materials)
+    "site_prep": {
+        "demolition & haul (per sq ft)": "$2 - $5",
+        "basic clearing": "$300 - $800 lump sum (small yard)"
+    },
+    "grading": {
+        "rough + final grade (per sq ft)": "$1.50 - $4",
+        "import soil / amendment (per cubic yard)": "$40 - $80 + delivery"
+    },
+    "plant_install": {
+        "5-gallon shrub/perennial (each)": "$15 - $35 installed",
+        "15-gallon tree (each)": "$75 - $150 installed",
+        "large specimen (each)": "$200+ installed"
+    },
+    "hardscape_install": {
+        "paver patio (per sq ft installed)": "$12 - $25",
+        "gravel path (per sq ft installed)": "$6 - $12",
+        "flagstone (per sq ft installed)": "$18 - $35"
+    },
+    "irrigation": {
+        "basic drip / spray system (per sq ft)": "$1.50 - $3.50 installed",
+        "full controller + valves (lump)": "$800 - $2,000"
+    },
+    "cleanup": {
+        "final grade + haul (per sq ft)": "$0.75 - $2",
+        "small project cleanup": "$200 - $500 lump sum"
+    },
+    "general_labor": {
+        "project management / supervision": "10-15% of total materials + install",
+        "permits + inspections (typical residential)": "$150 - $600"
     }
 }
 

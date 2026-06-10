@@ -31,18 +31,29 @@ except Exception as e:
 from qdrant_client import QdrantClient
 from qdrant_client.http import models
 
-# Initialize Qdrant
+# Initialize Qdrant (general collection for materials/hardscape if needed)
 QDRANT_URL = os.getenv("QDRANT_URL")
 QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
 COLLECTION_NAME = os.getenv("QDRANT_COLLECTION", "freepik_landscaping")
+PLANT_COLLECTION = os.getenv("PLANT_COLLECTION", "autoscape-plants")
 
 qdrant_client = None
+plant_catalog = None
+
 if QDRANT_URL and QDRANT_API_KEY:
     try:
         qdrant_client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
-        logger.info(f"✅ Connected to Qdrant collection: {COLLECTION_NAME}")
+        logger.info(f"✅ Connected to Qdrant (general): {COLLECTION_NAME}")
     except Exception as e:
         logger.error(f"❌ Qdrant connection failed: {e}")
+
+# Dedicated plants (independent collection, preferred for plantPalette)
+try:
+    from plant_catalog import PlantCatalog
+    plant_catalog = PlantCatalog()
+    logger.info(f"✅ Dedicated plants catalog ready: {PLANT_COLLECTION}")
+except Exception as e:
+    logger.warning(f"⚠️ Could not load dedicated PlantCatalog (will fallback): {e}")
 
 app = FastAPI(title="RAG Enhancement API (Cloud)")
 
@@ -68,6 +79,7 @@ class EnhancementRequest(BaseModel):
     features: List[DesignItem] = []
     structures: List[DesignItem] = []
     furniture: List[DesignItem] = []
+    labor: List[DesignItem] = []  # now supported with structured lookup from components collection
 
 
 def search_by_keyword(query: str, top_k: int = 3) -> List[Dict[str, Any]]:
@@ -152,7 +164,27 @@ def search_by_embedding(query: str, top_k: int = 3) -> List[Dict[str, Any]]:
 
 
 def search_plants(query: str, top_k: int = 3) -> List[Dict[str, Any]]:
-    """Search for plants using best available method."""
+    """Search for plants. Prefer the dedicated independent plants collection when available."""
+    if plant_catalog:
+        try:
+            results = plant_catalog.find_plant(query, top_k=top_k)
+            # Normalize a bit for the enhancement response shape
+            normalized = []
+            for r in results:
+                normalized.append({
+                    "specific_name": r.get("specific_name") or r.get("common_name"),
+                    "title": r.get("common_name"),
+                    "image_url": r.get("image_url"),
+                    "price_estimate": r.get("price_estimate") or r.get("price_range"),
+                    "description": r.get("description"),
+                    "category": r.get("category"),
+                    **{k: v for k, v in r.items() if k not in ("score",)}
+                })
+            return normalized
+        except Exception as e:
+            logger.warning(f"Dedicated plant search failed, falling back: {e}")
+
+    # Fallback to old general-collection search
     if USE_EMBEDDINGS:
         return search_by_embedding(query, top_k)
     return search_by_keyword(query, top_k)
@@ -166,51 +198,88 @@ async def enhance_with_rag(request: EnhancementRequest):
     
     try:
         plant_palette = []
+        hardscape_enriched = []
         
-        for plant_item in request.plants:
-            results = search_plants(plant_item.name, top_k=1)
-            
-            if results:
-                plant = results[0]
-                
-                # Handle quantity
-                quantity = 1
-                if isinstance(plant_item.quantity, (int, float)):
-                    quantity = int(plant_item.quantity)
-                elif isinstance(plant_item.quantity, str) and plant_item.quantity.isdigit():
-                    quantity = int(plant_item.quantity)
-                
-                # Get price
-                unit_price = plant.get('price_estimate', '$25')
-                if not unit_price:
-                    unit_price = '$25'
-                
-                # Calculate total
+        def _enrich_item(item: DesignItem, preferred_type: Optional[str] = None) -> Optional[Dict[str, Any]]:
+            """Enrich a single item (plant or hardscape) using the components catalog when available."""
+            results = []
+            if plant_catalog and preferred_type:
                 try:
-                    price_num = float(unit_price.replace('$', '').replace(',', '').split()[0])
-                    total = price_num * quantity
-                    total_estimate = f'${total:.0f}'
-                except:
-                    total_estimate = f'{unit_price} x{quantity}'
-                
-                plant_palette.append({
-                    "common_name": plant.get('specific_name') or plant.get('title', ''),
-                    "botanical_name": "",
-                    "image_url": plant.get('image_url', ''),
-                    "quantity": quantity,
-                    "size": "5-gallon",
-                    "unit_price": unit_price,
-                    "total_estimate": total_estimate,
-                    "rag_verified": True,
-                    "original_name": plant_item.name,
-                    "description": plant.get('description', '')
-                })
-        
+                    results = plant_catalog.find_component(item.name, component_type=preferred_type, top_k=1)
+                except Exception:
+                    results = []
+            if not results:
+                # fall back to the general search_plants (which itself prefers dedicated now)
+                results = search_plants(item.name, top_k=1)
+
+            if not results:
+                return None
+
+            comp = results[0]
+
+            qty = 1
+            if isinstance(item.quantity, (int, float)):
+                qty = int(item.quantity)
+            elif isinstance(item.quantity, str) and item.quantity.isdigit():
+                qty = int(item.quantity)
+
+            unit_price = comp.get('price_estimate') or comp.get('price_range') or '$25'
+            try:
+                price_num = float(str(unit_price).replace('$', '').replace(',', '').split()[0])
+                total = price_num * qty
+                total_estimate = f'${total:.0f}'
+            except Exception:
+                total_estimate = f'{unit_price} x{qty}'
+
+            return {
+                "common_name": comp.get('specific_name') or comp.get('title') or comp.get('common_name') or item.name,
+                "botanical_name": comp.get('botanical_name', ''),
+                "image_url": comp.get('image_url', ''),
+                "quantity": qty,
+                "size": item.description or ("5-gallon" if preferred_type == "plant" else "standard"),
+                "unit_price": unit_price,
+                "total_estimate": total_estimate,
+                "rag_verified": True,
+                "original_name": item.name,
+                "description": comp.get('description', ''),
+                "component_type": comp.get('component_type') or preferred_type or "unknown",
+                "category": comp.get('category', ''),
+                "unit": comp.get('unit', ''),
+            }
+
+        # Plants (for the visual PlantPalette)
+        for plant_item in request.plants:
+            enriched = _enrich_item(plant_item, preferred_type="plant")
+            if enriched:
+                plant_palette.append(enriched)
+
+        # Hardscape + other components (for budget line items)
+        for hs_item in request.hardscape:
+            enriched = _enrich_item(hs_item, preferred_type="hardscape")
+            if enriched:
+                hardscape_enriched.append(enriched)
+
+        # We could do the same for features/structures/furniture if they have repeatable pricing
+        for feat in request.features:
+            enriched = _enrich_item(feat)
+            if enriched:
+                hardscape_enriched.append(enriched)
+
+        # Labor - now backed by the same structured components collection
+        labor_enriched = []
+        for labor_item in request.labor:
+            enriched = _enrich_item(labor_item, preferred_type="labor")
+            if enriched:
+                labor_enriched.append(enriched)
+
         return {
             "success": True,
             "plantPalette": plant_palette,
+            "hardscape": hardscape_enriched,   # enriched hardscape + features for budget
+            "labor": labor_enriched,          # structured labor (site prep, installation, cleanup, etc.)
             "rag_enhanced": True,
-            "search_method": "semantic" if USE_EMBEDDINGS else "keyword"
+            "search_method": "dedicated_components" if plant_catalog else ("semantic" if USE_EMBEDDINGS else "keyword"),
+            "components_collection": PLANT_COLLECTION if plant_catalog else COLLECTION_NAME,
         }
     
     except Exception as e:
@@ -224,8 +293,11 @@ async def health():
     return {
         "status": "healthy",
         "rag_available": qdrant_client is not None,
-        "search_method": "semantic" if USE_EMBEDDINGS else "keyword",
-        "collection": COLLECTION_NAME
+        "components_catalog_available": plant_catalog is not None,
+        "components_collection": PLANT_COLLECTION,
+        "general_collection": COLLECTION_NAME,
+        "supported_types": ["plant", "hardscape", "material", "labor"],
+        "search_method": "dedicated_components" if plant_catalog else ("semantic" if USE_EMBEDDINGS else "keyword"),
     }
 
 

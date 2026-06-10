@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation, useParams } from 'react-router-dom';
+import { MethodologyPage } from './components/MethodologyPage';
 import { UploadArea } from './components/UploadArea';
 import { LoadingScreen } from './components/LoadingScreen';
 import { ResultsViewV2 as ResultsView } from './components/ResultsViewV2';
@@ -467,6 +468,15 @@ const AppContent: React.FC = () => {
                 Pricing
               </button>
               <button
+                onClick={() => navigate('/methodology')}
+                className={`transition-colors font-normal pb-1 border-b-2 ${location.pathname === '/methodology'
+                  ? 'text-green-700 border-green-700 font-semibold'
+                  : 'text-gray-700 hover:text-green-700 border-transparent'
+                  }`}
+              >
+                Methodology
+              </button>
+              <button
                 onClick={() => navigate('/blog')}
                 className={`transition-colors font-normal pb-1 border-b-2 ${location.pathname.startsWith('/blog')
                   ? 'text-green-700 border-green-700 font-semibold'
@@ -647,6 +657,7 @@ const AppContent: React.FC = () => {
           } />
 
           <Route path="/pricing" element={<PricingPage />} />
+          <Route path="/methodology" element={<MethodologyPage />} />
           <Route path="/blog" element={<BlogPage />} />
           <Route path="/blog/:slug" element={<BlogArticle />} />
           <Route path="/terms" element={<TermsOfService />} />

@@ -10,7 +10,9 @@ import re
 
 def calculate_budget_with_rag(items: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
-    Calculate budget using RAG plant catalog for accurate identification and pricing.
+    Calculate budget using the *dedicated* plants collection (autoscape-plants / PLANT_COLLECTION).
+    Independent from the general visual product RAG collection.
+    """
     
     Args:
         items: List of items with 'name', 'quantity', 'size'
