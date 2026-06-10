@@ -8,7 +8,7 @@
 // RAG Enhancement API - Python backend for plant catalog and budget calculation
 // Uses localhost in dev, Cloud Run in production
 export const RAG_API_BASE = import.meta.env.VITE_RAG_API_URL ||
-    (import.meta.env.DEV ? 'http://localhost:8002' : 'https://rag-api-289865003778.us-central1.run.app');
+    (import.meta.env.DEV ? 'http://localhost:8002' : 'https://rag-api-tejipfhw2q-uc.a.run.app');
 
 // Firebase Cloud Functions - Video generation
 export const CLOUD_FUNCTIONS_BASE = import.meta.env.VITE_CLOUD_FUNCTIONS_URL ||

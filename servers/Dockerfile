@@ -16,8 +16,7 @@ RUN pip install --no-cache-dir -r requirements-cloud.txt
 COPY *.py ./
 
 # Port
-ENV PORT=8080
 EXPOSE 8080
 
-# Run the API
-CMD exec uvicorn rag_enhancement_api:app --host 0.0.0.0 --port $PORT
+# Run the API (Cloud Run sets PORT env var automatically; use exec form for proper signal handling)
+CMD ["uvicorn", "rag_enhancement_api:app", "--host", "0.0.0.0", "--port", "8080"]

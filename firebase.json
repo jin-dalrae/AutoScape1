@@ -1,6 +1,5 @@
 {
     "hosting": {
-        "site": "auto-scape",
         "public": "dist",
         "ignore": [
             "firebase.json",
